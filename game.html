@@ -1,0 +1,314 @@
+
+<style>
+  * { margin: 0; padding: 0; box-sizing: border-box; }
+  body { overflow: hidden; background: #0a0a1a; }
+  #gameCanvas { display: block; cursor: default; }
+  #ui {
+    position: absolute; top: 16px; left: 50%; transform: translateX(-50%);
+    color: #FFD700; font-family: serif; font-size: 13px; letter-spacing: 2px;
+    text-align: center; text-shadow: 0 0 10px #FFD700; opacity: 0.7;
+    pointer-events: none;
+  }
+</style>
+<div id="ui">✦ MOVE YOUR CURSOR ✦</div>
+<canvas id="gameCanvas"></canvas>
+<script>
+const canvas = document.getElementById('gameCanvas');
+const ctx = canvas.getContext('2d');
+
+function resize() {
+  canvas.width = window.innerWidth || 800;
+  canvas.height = window.innerHeight || 600;
+}
+resize();
+window.addEventListener('resize', resize);
+
+const mouse = { x: canvas.width / 2, y: canvas.height / 2 };
+canvas.addEventListener('mousemove', e => { mouse.x = e.clientX; mouse.y = e.clientY; });
+canvas.addEventListener('touchmove', e => {
+  e.preventDefault();
+  mouse.x = e.touches[0].clientX; mouse.y = e.touches[0].clientY;
+}, { passive: false });
+
+// Segments: choose 8-12 per design; 12 gives smooth undulation
+const SEGMENTS = 12;
+const SEG_DIST = 28;
+
+// Wave parameters for sine-based undulation
+const WAVE_SPEED = 0.12;
+const WAVE_AMPLITUDE = 18;
+const WAVE_LENGTH = 0.9;
+
+const dragon = [];
+for (let i = 0; i < SEGMENTS; i++) {
+  dragon.push({ x: canvas.width/2, y: canvas.height/2 + i * SEG_DIST });
+}
+
+let time = 0;
+const particles = [];
+const clouds = [];
+const lanterns = [];
+
+// Clouds
+for (let i = 0; i < 5; i++) {
+  clouds.push({
+    x: Math.random() * 1200, y: 60 + Math.random() * 200,
+    r: 40 + Math.random() * 60, speed: 0.15 + Math.random() * 0.2, alpha: 0.04 + Math.random() * 0.06
+  });
+}
+// Lanterns
+for (let i = 0; i < 6; i++) {
+  lanterns.push({
+    x: Math.random() * 1200, y: 80 + Math.random() * 300,
+    phase: Math.random() * Math.PI * 2, speed: 0.3 + Math.random() * 0.4,
+    size: 8 + Math.random() * 10, hue: Math.random() > 0.5 ? '#DC143C' : '#FFD700'
+  });
+}
+
+function spawnParticle(x, y) {
+  const angle = Math.random() * Math.PI * 2;
+  const speed = 0.5 + Math.random() * 1.5;
+  particles.push({
+    x, y, vx: Math.cos(angle) * speed, vy: Math.sin(angle) * speed - 0.5,
+    life: 1, decay: 0.015 + Math.random() * 0.02,
+    size: 1.5 + Math.random() * 3,
+    color: Math.random() < 0.5 ? '#FFD700' : (Math.random() < 0.5 ? '#FF6B6B' : '#78FFD6')
+  });
+}
+
+function drawBackground() {
+  const W = canvas.width, H = canvas.height;
+  const grad = ctx.createLinearGradient(0, 0, 0, H);
+  grad.addColorStop(0, '#060612');
+  grad.addColorStop(0.5, '#0d0d2b');
+  grad.addColorStop(1, '#1a0a0a');
+  ctx.fillStyle = grad;
+  ctx.fillRect(0, 0, W, H);
+
+  // Stars
+  ctx.fillStyle = 'rgba(255,255,200,0.5)';
+  for (let i = 0; i < 80; i++) {
+    const sx = ((i * 137.5 + time * 0.1) % W);
+    const sy = ((i * 97.3) % (H * 0.6));
+    const twinkle = 0.3 + 0.7 * Math.abs(Math.sin(time * 0.02 + i));
+    ctx.globalAlpha = twinkle * 0.6;
+    ctx.fillRect(sx, sy, 1.5, 1.5);
+  }
+  ctx.globalAlpha = 1;
+
+  // Clouds
+  for (const c of clouds) {
+    c.x -= c.speed;
+    if (c.x < -200) c.x = W + 100;
+    ctx.save();
+    ctx.globalAlpha = c.alpha;
+    ctx.fillStyle = '#aaddff';
+    for (let dx = -1; dx <= 1; dx++) {
+      ctx.beginPath();
+      ctx.arc(c.x + dx * c.r * 0.5, c.y, c.r * (0.6 + Math.abs(dx) * 0.1), 0, Math.PI * 2);
+      ctx.fill();
+    }
+    ctx.restore();
+  }
+
+  // Lanterns
+  for (const l of lanterns) {
+    l.x -= l.speed * 0.3;
+    if (l.x < -30) l.x = W + 30;
+    const bobY = l.y + Math.sin(time * 0.03 + l.phase) * 8;
+    ctx.save();
+    ctx.globalAlpha = 0.5;
+    // Lantern body
+    ctx.fillStyle = l.hue;
+    ctx.beginPath();
+    ctx.ellipse(l.x, bobY, l.size * 0.5, l.size, 0, 0, Math.PI * 2);
+    ctx.fill();
+    // Glow
+    const grd = ctx.createRadialGradient(l.x, bobY, 0, l.x, bobY, l.size * 2.5);
+    grd.addColorStop(0, l.hue === '#FFD700' ? 'rgba(255,200,0,0.3)' : 'rgba(220,20,60,0.3)');
+    grd.addColorStop(1, 'transparent');
+    ctx.fillStyle = grd;
+    ctx.globalAlpha = 0.4;
+    ctx.beginPath();
+    ctx.arc(l.x, bobY, l.size * 2.5, 0, Math.PI * 2);
+    ctx.fill();
+    // String
+    ctx.strokeStyle = 'rgba(255,220,100,0.4)';
+    ctx.lineWidth = 0.5;
+    ctx.beginPath(); ctx.moveTo(l.x, bobY - l.size); ctx.lineTo(l.x, bobY - l.size - 20); ctx.stroke();
+    ctx.restore();
+  }
+}
+
+function getSegRadius(i) {
+  if (i === 0) return 22;
+  const t = i / SEGMENTS;
+  return Math.max(4, 14 - t * 10);
+}
+
+function drawDragon() {
+  const N = dragon.length;
+
+  // Shadow
+  ctx.save();
+  ctx.globalAlpha = 0.14;
+  for (let i = N - 1; i >= 0; i--) {
+    const r = getSegRadius(i);
+    ctx.beginPath();
+    ctx.arc(dragon[i].x + 6, dragon[i].y + 8, r, 0, Math.PI * 2);
+    ctx.fillStyle = '#000';
+    ctx.fill();
+  }
+  ctx.restore();
+
+  // Body segments - alternating black & white with subtle accents
+  for (let i = N - 1; i >= 1; i--) {
+    const r = getSegRadius(i);
+    const isWhite = (i % 2 === 0);
+    ctx.save();
+    ctx.fillStyle = isWhite ? '#FFFFFF' : '#000000';
+    ctx.beginPath();
+    ctx.arc(dragon[i].x, dragon[i].y, r, 0, Math.PI * 2);
+    ctx.fill();
+
+    // Thin gold rim
+    ctx.strokeStyle = 'rgba(255,215,0,0.12)';
+    ctx.lineWidth = Math.max(1, r * 0.06);
+    ctx.stroke();
+
+    // Scale arc for texture
+    ctx.strokeStyle = isWhite ? 'rgba(0,0,0,0.12)' : 'rgba(255,255,255,0.06)';
+    ctx.lineWidth = 0.8;
+    ctx.beginPath();
+    ctx.arc(dragon[i].x, dragon[i].y, r * 0.68, 0.36, Math.PI - 0.36);
+    ctx.stroke();
+    ctx.restore();
+  }
+
+  // Tail fin (small and elegant)
+  const tail = dragon[N - 1];
+  const tailPrev = dragon[N - 2];
+  const tailAngle = Math.atan2(tail.y - tailPrev.y, tail.x - tailPrev.x);
+  ctx.save();
+  ctx.translate(tail.x, tail.y);
+  ctx.rotate(tailAngle);
+  ctx.fillStyle = '#000000';
+  ctx.globalAlpha = 0.9;
+  ctx.beginPath();
+  ctx.moveTo(0, 0);
+  ctx.quadraticCurveTo(14, -8 + Math.sin(time * 0.08) * 4, 28, -6 + Math.sin(time * 0.1) * 6);
+  ctx.quadraticCurveTo(14, 0, 0, 0);
+  ctx.fill();
+  ctx.restore();
+
+  // HEAD
+  const head = dragon[0];
+  const next = dragon[1];
+  const headAngle = Math.atan2(head.y - next.y, head.x - next.x);
+
+  ctx.save();
+  ctx.translate(head.x, head.y);
+  ctx.rotate(headAngle);
+
+  // Subtle head highlight
+  const glow = ctx.createRadialGradient(0, 0, 0, 0, 0, 32);
+  glow.addColorStop(0, 'rgba(255,255,255,0.06)');
+  glow.addColorStop(1, 'transparent');
+  ctx.fillStyle = glow;
+  ctx.beginPath(); ctx.arc(0, 0, 32, 0, Math.PI * 2); ctx.fill();
+
+  // Head - black snake-like
+  ctx.fillStyle = '#000000';
+  ctx.beginPath(); ctx.ellipse(0, 0, 20, 14, 0, 0, Math.PI * 2); ctx.fill();
+  ctx.fillStyle = '#111111'; ctx.beginPath(); ctx.ellipse(18, 0, 8, 6, 0, 0, Math.PI * 2); ctx.fill();
+
+  // Eyes - bright white with small pupil
+  ctx.fillStyle = '#FFFFFF'; ctx.beginPath(); ctx.ellipse(-4, -6, 5, 3.5, -0.2, 0, Math.PI * 2); ctx.fill();
+  ctx.beginPath(); ctx.ellipse(-4, 6, 5, 3.5, 0.2, 0, Math.PI * 2); ctx.fill();
+  ctx.fillStyle = 'rgba(0,0,0,0.95)'; ctx.beginPath(); ctx.arc(-2, -6, 1.2, 0, Math.PI * 2); ctx.fill();
+  ctx.beginPath(); ctx.arc(-2, 6, 1.2, 0, Math.PI * 2); ctx.fill();
+
+  // Horns / whiskers
+  ctx.strokeStyle = 'rgba(255,255,255,0.9)'; ctx.lineWidth = 2;
+  ctx.beginPath(); ctx.moveTo(-6, -10); ctx.quadraticCurveTo(-18, -22, -30, -28); ctx.stroke();
+  ctx.beginPath(); ctx.moveTo(-6, 10); ctx.quadraticCurveTo(-18, 22, -30, 28); ctx.stroke();
+
+  // Whiskers sway
+  ctx.strokeStyle = 'rgba(255,255,255,0.85)'; ctx.lineWidth = 1.2;
+  const whiskerSwing = Math.sin(time * 0.08) * 6;
+  ctx.beginPath(); ctx.moveTo(16, -4); ctx.quadraticCurveTo(28 + whiskerSwing, -12, 44 + whiskerSwing * 1.5, -14); ctx.stroke();
+  ctx.beginPath(); ctx.moveTo(16, 4); ctx.quadraticCurveTo(28 - whiskerSwing, 12, 44 - whiskerSwing * 1.5, 14); ctx.stroke();
+
+  ctx.restore();
+}
+
+function drawParticles() {
+  for (let i = particles.length - 1; i >= 0; i--) {
+    const p = particles[i];
+    p.x += p.vx; p.y += p.vy; p.vy += 0.02;
+    p.life -= p.decay;
+    if (p.life <= 0) { particles.splice(i, 1); continue; }
+    ctx.save();
+    ctx.globalAlpha = p.life * 0.85;
+    ctx.fillStyle = p.color;
+    ctx.shadowColor = p.color;
+    ctx.shadowBlur = 6;
+    ctx.beginPath();
+    ctx.arc(p.x, p.y, p.size * p.life, 0, Math.PI * 2);
+    ctx.fill();
+    ctx.restore();
+  }
+}
+
+function updateDragon() {
+  // Smooth head movement toward cursor
+  const headEase = 0.14;
+  dragon[0].x += (mouse.x - dragon[0].x) * headEase;
+  dragon[0].y += (mouse.y - dragon[0].y) * headEase;
+
+  // Compute a backbone from the head toward the tail using head angle
+  const head = dragon[0];
+  const headAngle = Math.atan2(mouse.y - head.y, mouse.x - head.x);
+
+  for (let i = 1; i < SEGMENTS; i++) {
+    const along = i * SEG_DIST;
+    const baseX = head.x - Math.cos(headAngle) * along;
+    const baseY = head.y - Math.sin(headAngle) * along;
+    const perpX = Math.cos(headAngle + Math.PI / 2);
+    const perpY = Math.sin(headAngle + Math.PI / 2);
+    const wave = Math.sin(time * WAVE_SPEED - i * WAVE_LENGTH);
+    const amp = WAVE_AMPLITUDE * (1 - i / SEGMENTS);
+    const targetX = baseX + perpX * wave * amp;
+    const targetY = baseY + perpY * wave * amp;
+
+    // Lerp each segment toward its target; farther segments move slower (tail lag)
+    const lerp = Math.max(0.04, 0.18 - i * 0.01);
+    dragon[i].x += (targetX - dragon[i].x) * lerp;
+    dragon[i].y += (targetY - dragon[i].y) * lerp;
+  }
+
+  // Particles from mid-body
+  if (time % 4 === 0 && particles.length < 120) {
+    const seg = dragon[Math.floor(SEGMENTS * 0.45)];
+    spawnParticle(seg.x, seg.y);
+  }
+}
+
+function loop() {
+  ctx.clearRect(0, 0, canvas.width, canvas.height);
+  drawBackground();
+  drawParticles();
+  updateDragon();
+  drawDragon();
+  time++;
+  requestAnimationFrame(loop);
+}
+
+// Start dragon in center
+for (let i = 0; i < SEGMENTS; i++) {
+  dragon[i].x = canvas.width / 2;
+  dragon[i].y = canvas.height / 2 + i * SEG_DIST;
+}
+
+loop();
+</script>
