@@ -1,0 +1,38 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Chinese Dragon Game</title>
+    <style>
+        body { font-family: Arial, sans-serif; }
+        .container { max-width: 600px; margin: auto; text-align: center; }
+        .game-board { border: 1px solid #000; width: 100%; height: 400px; position: relative; }
+        .dragon { width: 20px; height: 20px; background-color: green; position: absolute; }
+    </style>
+</head>
+<body>
+    <div class="container">
+        <h1>Chinese Dragon Game</h1>
+        <div class="game-board" id="gameBoard"></div>
+        <script>
+            const board = document.getElementById('gameBoard');
+            let dragon = document.createElement('div');
+            dragon.className = 'dragon';
+            board.appendChild(dragon);
+
+            let position = 0;
+
+            function moveDragon() {
+                position += 10;
+                if (position > board.offsetWidth) {
+                    position = 0;
+                }
+                dragon.style.left = position + 'px';
+            }
+
+            setInterval(moveDragon, 100);
+        </script>
+    </div>
+</body>
+</html>
